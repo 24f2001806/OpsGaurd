@@ -1,5 +1,6 @@
 from app.api.routes import alerts, auth, dashboard, endpoints, history, incidents
 from contextlib import asynccontextmanager
+from app.core.errors import register_exception_handlers
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +25,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+register_exception_handlers(app)
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(endpoints.router, prefix="/endpoints", tags=["endpoints"])
