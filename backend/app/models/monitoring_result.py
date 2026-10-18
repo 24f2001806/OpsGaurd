@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
@@ -14,10 +14,10 @@ class MonitoringResult(Base):
     endpoint_id: Mapped[int] = mapped_column(
         ForeignKey("monitored_endpoints.id", ondelete="CASCADE"), index=True
     )
-    timestamp: Mapped[datetime] = mapped_column(
+    checked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
-    status: Mapped[str] = mapped_column(String(10))  # UP or DOWN
-    response_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # ms
-    http_status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_success: Mapped[bool] = mapped_column(Boolean)
+    status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_time_ms: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
