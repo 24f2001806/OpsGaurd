@@ -1,4 +1,4 @@
-from app.api.routes import auth, endpoints
+from app.api.routes import alerts, auth, dashboard, endpoints, history, incidents
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -27,6 +27,10 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(endpoints.router, prefix="/endpoints", tags=["endpoints"])
+app.include_router(history.router, tags=["history"])
+app.include_router(incidents.router, tags=["incidents"])
+app.include_router(alerts.router, tags=["alerts"])
+app.include_router(dashboard.router, tags=["dashboard"])
 
 
 @app.get("/health")
