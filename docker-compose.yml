@@ -1,5 +1,4 @@
-# Owner: Member 3. Starter: shared PostgreSQL + Redis for everyone.
-# Add backend, worker and frontend services as their Dockerfiles are created.
+# Owner: Member 3. Runs the whole OpsGuard stack: PostgreSQL, Redis, backend, worker, frontend.
 services:
   postgres:
     image: postgres:16
@@ -39,6 +38,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build: ./worker
+    image: opsguard-worker:v1
+    container_name: opsguard-worker
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REDIS_QUEUE: opsguard:monitoring:jobs
+      DATABASE_URL: postgresql://opsguard_user:opsguard_password@postgres:5432/opsguard_db
+    depends_on:
+      backend:
+        condition: service_started
       redis:
         condition: service_started
 
