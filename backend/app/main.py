@@ -1,3 +1,4 @@
+from app.api.routes import auth
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -23,6 +24,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 
 
 @app.get("/health")
