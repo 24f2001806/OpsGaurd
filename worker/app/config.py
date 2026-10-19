@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 @dataclass(frozen=True)
 class Settings:
     redis_url: str = os.getenv(
@@ -34,6 +33,10 @@ class Settings:
     failures_before_down: int = int(
         os.getenv("FAILURES_BEFORE_DOWN", "2")
     )
+
+    sender_email: str = os.getenv("SENDER_EMAIL", "")
+    sender_password: str = os.getenv("SENDER_PASSWORD", "")
+    slack_webhook_url: str = os.getenv("SLACK_WEBHOOK_URL", "")
 
 
 settings = Settings()

@@ -51,6 +51,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       REDIS_QUEUE: opsguard:monitoring:jobs
       DATABASE_URL: postgresql://opsguard_user:opsguard_password@postgres:5432/opsguard_db
+      SENDER_EMAIL: ${SENDER_EMAIL:-}
+      SENDER_PASSWORD: ${SENDER_PASSWORD:-}
     depends_on:
       backend:
         condition: service_started

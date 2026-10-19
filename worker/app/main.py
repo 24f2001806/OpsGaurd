@@ -1,3 +1,4 @@
+from app.alerts import notify_endpoint
 import logging
 import threading
 import time
@@ -105,14 +106,22 @@ def process_job(job: dict, redis_worker: RedisWorker) -> None:
         interval,
     )
 
-    # Alerts (email / Slack) belong here: this is where a website
-    # goes DOWN or recovers.
+        # Notify only when the endpoint changes state.
     if update.became_down:
         logger.warning("Monitor %s entered DOWN state", monitor_id)
+        notify_endpoint(
+            endpoint_id=monitor_id,
+            url=url,
+            event="DOWN",
+        )
 
     if update.recovered:
         logger.info("Monitor %s recovered", monitor_id)
-
+        notify_endpoint(
+            endpoint_id=monitor_id,
+            url=url,
+            event="RECOVERED",
+        )
 
 def run_scheduler(redis_worker: RedisWorker) -> None:
     """Every second, move jobs whose time has come into the queue."""
