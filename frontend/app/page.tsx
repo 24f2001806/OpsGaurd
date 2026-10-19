@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, ArrowRight, Lock, Mail, User } from 'lucide-react';
+import { api, getToken, setToken } from '@/lib/api';
 
 export default function AuthPage() {
   const router = useRouter();
@@ -10,17 +11,36 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Already signed in? Go straight to the dashboard.
+  useEffect(() => {
+    if (getToken()) router.replace('/user/dashboard');
+  }, [router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // In production, connects to FastAPI POST /auth/login or /auth/signup
-    router.push('/user/dashboard');
+    setError('');
+    setLoading(true);
+    try {
+      if (!isLogin) {
+        await api.signup(name, email, password); // create the account first
+      }
+      const { access_token } = await api.login(email, password);
+      setToken(access_token);
+      router.push('/user/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-[#F1F3F9] flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl border border-[#CBD5E1] shadow-xl max-w-md w-full p-8 space-y-6">
-        
+
         {/* Header */}
         <div className="text-center space-y-2">
           <div className="w-12 h-12 bg-[#EA580C] rounded-2xl flex items-center justify-center text-white mx-auto shadow-md shadow-[#EA580C]/30">
@@ -36,7 +56,7 @@ export default function AuthPage() {
         <div className="flex bg-[#F8FAFC] p-1 rounded-xl border border-[#E2E8F0] text-xs font-bold">
           <button
             type="button"
-            onClick={() => setIsLogin(true)}
+            onClick={() => { setIsLogin(true); setError(''); }}
             className={`flex-1 py-2 rounded-lg transition ${
               isLogin ? 'bg-[#0F172A] text-white shadow-sm' : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
@@ -45,7 +65,7 @@ export default function AuthPage() {
           </button>
           <button
             type="button"
-            onClick={() => setIsLogin(false)}
+            onClick={() => { setIsLogin(false); setError(''); }}
             className={`flex-1 py-2 rounded-lg transition ${
               !isLogin ? 'bg-[#0F172A] text-white shadow-sm' : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
@@ -66,7 +86,7 @@ export default function AuthPage() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Sansui Fernando"
+                  placeholder="Your name"
                   className="w-full pl-9 pr-3 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-xs focus:outline-none focus:border-[#EA580C]"
                 />
               </div>
@@ -82,7 +102,7 @@ export default function AuthPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="sansui@opsguard.io"
+                placeholder="you@example.com"
                 className="w-full pl-9 pr-3 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-xs focus:outline-none focus:border-[#EA580C]"
               />
             </div>
@@ -95,19 +115,29 @@ export default function AuthPage() {
               <input
                 type="password"
                 required
+                minLength={isLogin ? undefined : 8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="w-full pl-9 pr-3 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-xs focus:outline-none focus:border-[#EA580C]"
               />
             </div>
+            {!isLogin && <p className="text-[11px] text-[#64748B]">At least 8 characters.</p>}
           </div>
+
+          {error && (
+            <p className="text-xs font-bold text-[#E11D48] bg-[#E11D48]/10 border border-[#E11D48]/30 rounded-xl p-3">
+              {error}
+            </p>
+          )}
 
           <button
             type="submit"
-            className="w-full py-3 bg-[#EA580C] hover:bg-[#C2410C] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md shadow-[#EA580C]/20 transition mt-2"
+            disabled={loading}
+            className="w-full py-3 bg-[#EA580C] hover:bg-[#C2410C] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md shadow-[#EA580C]/20 transition mt-2 disabled:opacity-60"
           >
-            {isLogin ? 'Access Portal' : 'Register Account'} <ArrowRight className="w-4 h-4" />
+            {loading ? 'Please wait…' : isLogin ? 'Access Portal' : 'Register Account'}
+            {!loading && <ArrowRight className="w-4 h-4" />}
           </button>
         </form>
 

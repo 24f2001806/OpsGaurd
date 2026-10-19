@@ -4,41 +4,58 @@ import { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Navbar from '@/components/Navbar';
 import { AlertOctagon } from 'lucide-react';
-
-const incidentList = [
-  {
-    id: 'INC-2026-089',
-    endpointId: '2',
-    endpoint: 'Billing & Checkout Service',
-    url: 'https://api.service.com',
-    status: 'ACTIVE',
-    startedAt: '2026-10-18 18:24:50 UTC',
-    duration: '18m 30s',
-    reason: 'HTTP 503 Service Unavailable — Connection pool saturation on primary database replica',
-  },
-  {
-    id: 'INC-2026-084',
-    endpointId: '4',
-    endpoint: 'Webhook Relay Worker',
-    url: 'https://hooks.opsguard.io/dispatch',
-    status: 'RESOLVED',
-    startedAt: '2026-10-17 21:14:00 UTC',
-    duration: '14m 40s',
-    reason: 'HTTP 504 Gateway Timeout — Upstream deployment timeout',
-  },
-];
+import { api, type Endpoint, type Incident } from '@/lib/api';
+import { usePolling, useRequireLogin } from '@/lib/hooks';
+import { formatDateTime, formatDuration } from '@/lib/format';
 
 export default function IncidentsPage() {
-  const [selectedIncidentId, setSelectedIncidentId] = useState('INC-2026-089');
+  useRequireLogin();
+
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [urls, setUrls] = useState<Record<number, string>>({});
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState('');
+  const [selectedIncidentId, setSelectedIncidentId] = useState<number | null>(null);
+
+  const load = async () => {
+    try {
+      const [list, eps] = await Promise.all([api.incidents(), api.listEndpoints()]);
+      const map: Record<number, string> = {};
+      eps.forEach((e: Endpoint) => (map[e.id] = e.url));
+      setIncidents(list);
+      setUrls(map);
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Could not load incidents');
+    } finally {
+      setLoaded(true);
+    }
+  };
+  usePolling(load, 5000);
+
+  const active = incidents.filter((i) => i.status === 'OPEN').length;
+  const resolved = incidents.length - active;
+
+  const durationOf = (item: Incident) => {
+    if (item.duration_seconds != null) return formatDuration(item.duration_seconds);
+    if (item.resolved_at) {
+      return formatDuration((new Date(item.resolved_at).getTime() - new Date(item.started_at).getTime()) / 1000);
+    }
+    return formatDuration((Date.now() - new Date(item.started_at).getTime()) / 1000) + ' (ongoing)';
+  };
 
   return (
     <div className="flex min-h-screen bg-[#060913] text-white">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <Navbar title="Incident Command & Outage Logs" user="Standard User" />
+        <Navbar title="Incident Command & Outage Logs" />
 
         <main className="p-8 space-y-6 max-w-[1700px] w-full mx-auto">
-          
+
+          {error && (
+            <p className="text-xs font-bold text-[#FF0055] bg-[#FF0055]/10 border border-[#FF0055]/30 rounded-xl p-3">{error}</p>
+          )}
+
           <div className="bg-[#0D1322] p-6 rounded-2xl border-2 border-[#FF0055]/40 shadow-xl flex justify-between items-center">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#FF0055] to-[#FF7A00] flex items-center justify-center text-white shadow-lg shadow-[#FF0055]/30">
@@ -46,25 +63,34 @@ export default function IncidentsPage() {
               </div>
               <div>
                 <h2 className="text-xl font-black text-white">Incident Command & Outage Center</h2>
-                <p className="text-xs text-[#94A3B8]">Real-time outage tracking and automated 10s fast-check verification</p>
+                <p className="text-xs text-[#94A3B8]">An incident opens when a website fails 2 checks in a row and closes by itself when it recovers</p>
               </div>
             </div>
 
-            <button className="px-5 py-2.5 bg-gradient-to-r from-[#FF007A] to-[#FF7A00] text-white rounded-xl text-xs font-black shadow-lg shadow-[#FF7A00]/30 hover:opacity-90">
-              Resolve All Active (1)
-            </button>
+            <div className="text-xs font-black font-mono text-right space-y-1">
+              <p className="text-[#FF0055]">{active} active</p>
+              <p className="text-[#10B981]">{resolved} resolved</p>
+            </div>
           </div>
 
+          {loaded && incidents.length === 0 && (
+            <div className="bg-[#0D1322] p-8 rounded-2xl border border-dashed border-[#1E293B] text-center text-xs text-[#94A3B8]">
+              No incidents recorded. Everything you monitor has been healthy.
+            </div>
+          )}
+
           <div className="space-y-4">
-            {incidentList.map((item) => {
+            {incidents.map((item) => {
+              const isActive = item.status === 'OPEN';
               const isSelected = selectedIncidentId === item.id;
               return (
-                <div 
-                  key={item.id} 
+                <div
+                  key={item.id}
+                  data-testid={`incident-${item.id}`}
                   onClick={() => setSelectedIncidentId(item.id)}
                   className={`p-6 rounded-2xl border-2 bg-[#0D1322] space-y-4 cursor-pointer transition-all duration-300 ${
                     isSelected
-                      ? item.status === 'ACTIVE'
+                      ? isActive
                         ? 'border-[#FF0055] shadow-xl shadow-[#FF0055]/20 scale-[1.005]'
                         : 'border-[#10B981] shadow-xl shadow-[#10B981]/20 scale-[1.005]'
                       : 'border-[#1E293B] hover:border-[#334155]'
@@ -73,16 +99,18 @@ export default function IncidentsPage() {
                   <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                       <span className={`px-3 py-1 rounded-full text-xs font-black ${
-                        item.status === 'ACTIVE' ? 'bg-[#FF0055]/20 text-[#FF0055] border border-[#FF0055]/40' : 'bg-[#10B981]/20 text-[#10B981]'
+                        isActive ? 'bg-[#FF0055]/20 text-[#FF0055] border border-[#FF0055]/40' : 'bg-[#10B981]/20 text-[#10B981]'
                       }`}>
-                        ● {item.status}
+                        ● {isActive ? 'ACTIVE' : 'RESOLVED'}
                       </span>
-                      <h4 className="font-black text-base text-white">{item.endpoint}</h4>
-                      <span className="text-xs font-mono text-[#F97316]">({item.url})</span>
+                      <h4 className="font-black text-base text-white">{item.endpoint_name ?? `Endpoint ${item.endpoint_id}`}</h4>
+                      {urls[item.endpoint_id] && (
+                        <span className="text-xs font-mono text-[#F97316]">({urls[item.endpoint_id]})</span>
+                      )}
                     </div>
 
-                    <a 
-                      href={`/user/endpoints/${item.endpointId}`} 
+                    <a
+                      href={`/user/endpoints/${item.endpoint_id}`}
                       onClick={(e) => e.stopPropagation()}
                       className="px-4 py-2 bg-[#1A2338] text-white rounded-xl text-xs font-bold hover:bg-[#24304C]"
                     >
@@ -91,8 +119,16 @@ export default function IncidentsPage() {
                   </div>
 
                   <div className="bg-[#0B0F19] p-4 rounded-xl border border-[#1E293B] text-xs space-y-2">
-                    <p className="text-[#94A3B8]"><strong className="text-white">Root Cause:</strong> {item.reason}</p>
-                    <p className="text-[#94A3B8] font-mono"><strong className="text-white font-sans">Started:</strong> {item.startedAt} · <strong className="text-white font-sans">Duration:</strong> {item.duration}</p>
+                    <p className="text-[#94A3B8] font-mono">
+                      <strong className="text-white font-sans">Incident:</strong> INC-{String(item.id).padStart(4, '0')} ·{' '}
+                      <strong className="text-white font-sans">Started:</strong> {formatDateTime(item.started_at)} ·{' '}
+                      <strong className="text-white font-sans">Duration:</strong> {durationOf(item)}
+                    </p>
+                    {item.resolved_at && (
+                      <p className="text-[#94A3B8] font-mono">
+                        <strong className="text-white font-sans">Resolved:</strong> {formatDateTime(item.resolved_at)}
+                      </p>
+                    )}
                   </div>
                 </div>
               );

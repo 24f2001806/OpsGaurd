@@ -3,21 +3,62 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Globe, AlertTriangle, Bell, Shield, LogOut } from 'lucide-react';
+import { api, clearToken, type DashboardSummary, type Endpoint } from '@/lib/api';
+import { usePolling } from '@/lib/hooks';
 
 export default function Sidebar() {
   const rawPathname = usePathname();
   const [pathname, setPathname] = useState('');
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [firstEndpoint, setFirstEndpoint] = useState<Endpoint | null>(null);
 
   useEffect(() => {
     if (rawPathname) setPathname(rawPathname);
   }, [rawPathname]);
 
+  // The numbers next to the menu items come from the backend.
+  usePolling(async () => {
+    try {
+      const [s, eps] = await Promise.all([api.summary(), api.listEndpoints()]);
+      setSummary(s);
+      setFirstEndpoint(eps[0] ?? null);
+    } catch {
+      /* keep the last numbers */
+    }
+  }, 5000);
+
+  const down = summary?.down ?? 0;
+  const active = summary?.active_incidents ?? 0;
+
   const navLinks = [
-    { name: 'Dashboard', href: '/user/dashboard', icon: LayoutDashboard, count: '12' },
-    { name: 'Endpoints', href: '/user/endpoints/1', icon: Globe, status: '2 Down', statusColor: 'text-pink-500 font-bold' },
-    { name: 'Incidents', href: '/user/incidents', icon: AlertTriangle, status: '1 Active', statusColor: 'text-amber-400 font-bold' },
+    {
+      name: 'Dashboard',
+      href: '/user/dashboard',
+      icon: LayoutDashboard,
+      count: summary ? String(summary.total_monitored) : undefined,
+    },
+    {
+      name: 'Endpoints',
+      // opens the first website's details (or the dashboard if there are none yet)
+      href: firstEndpoint ? `/user/endpoints/${firstEndpoint.id}` : '/user/dashboard',
+      icon: Globe,
+      status: summary ? (down > 0 ? `${down} Down` : 'All OK') : undefined,
+      statusColor: down > 0 ? 'text-pink-500 font-bold' : 'text-[#10B981] font-bold',
+    },
+    {
+      name: 'Incidents',
+      href: '/user/incidents',
+      icon: AlertTriangle,
+      status: summary ? (active > 0 ? `${active} Active` : 'None') : undefined,
+      statusColor: active > 0 ? 'text-amber-400 font-bold' : 'text-[#64748B] font-bold',
+    },
     { name: 'Alert Settings', href: '/user/settings', icon: Bell },
   ];
+
+  const logout = () => {
+    clearToken();
+    window.location.href = '/';
+  };
 
   return (
     <aside className="w-64 bg-[#0B0F19] border-r border-[#1E293B] min-h-screen p-5 flex flex-col justify-between shrink-0 shadow-2xl">
@@ -47,10 +88,12 @@ export default function Sidebar() {
         <nav className="space-y-2">
           {navLinks.map((link) => {
             const Icon = link.icon;
-            const isActive = pathname === link.href || (link.href.includes('/endpoints') && pathname.includes('/endpoints'));
+            const isActive =
+              pathname === link.href ||
+              (link.name === 'Endpoints' && pathname.includes('/endpoints'));
             return (
               <a
-                key={link.href}
+                key={link.name}
                 href={link.href}
                 className={`flex items-center justify-between px-4 py-3 rounded-xl text-xs font-bold transition-all duration-300 ${
                   isActive
@@ -68,9 +111,7 @@ export default function Sidebar() {
                   </span>
                 )}
                 {link.status && (
-                  <span className={`text-[10px] font-mono ${link.statusColor}`}>
-                    {link.status}
-                  </span>
+                  <span className={`text-[10px] font-mono ${link.statusColor}`}>{link.status}</span>
                 )}
               </a>
             );
@@ -80,12 +121,12 @@ export default function Sidebar() {
 
       {/* Logout */}
       <div className="border-t border-[#1E293B] pt-4">
-        <a
-          href="/"
+        <button
+          onClick={logout}
           className="flex items-center gap-2 text-xs font-bold text-[#64748B] hover:text-[#EF4444] px-3 py-2 rounded-lg transition-colors"
         >
           <LogOut className="w-4 h-4" /> Exit Session
-        </a>
+        </button>
       </div>
     </aside>
   );
