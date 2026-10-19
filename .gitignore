@@ -28,3 +28,12 @@ node_modules/
 .next/
 .env
 .env.local
+
+.terraform/
+*.tfstate
+*.tfstate.*
+.idea/
+*.iml
+*.eml
+.project
+.classpath

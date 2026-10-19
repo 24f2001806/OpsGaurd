@@ -1,6 +1,7 @@
 from app.api.routes import alerts, auth, dashboard, endpoints, history, incidents
 from contextlib import asynccontextmanager
 from app.core.errors import register_exception_handlers
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +26,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
 register_exception_handlers(app)
 

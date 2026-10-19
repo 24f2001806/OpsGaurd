@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # 1. Self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # 2. CPU / memory of the host (node-exporter)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # 3. OpsGuard API and request rate (Member 1)
+  - job_name: 'opsguard-backend-api'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['backend:8000']
+
+  # 4. Redis queue metrics (Member 2 worker queue)
+  - job_name: 'redis-queue-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # 5. Kubernetes pod health: enable after the Kubernetes step
+  # - job_name: 'kubernetes-cadvisor'
+  #   static_configs:
+  #     - targets: ['kubernetes.default.svc:10250']
