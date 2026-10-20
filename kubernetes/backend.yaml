@@ -1,0 +1,69 @@
+# FastAPI backend. The JWT secret is NOT stored in this file (the repo is public).
+# Create it once before applying:
+#   kubectl create secret generic opsguard-secrets --from-literal=JWT_SECRET_KEY=<any-long-random-string>
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: opsguard-backend:v1
+          imagePullPolicy: Never   # use the image built locally, do not look online
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: postgresql+psycopg2://opsguard_user:opsguard_password@postgres:5432/opsguard_db
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: opsguard-secrets
+                  key: JWT_SECRET_KEY
+            - name: JWT_ALGORITHM
+              value: HS256
+            - name: ACCESS_TOKEN_EXPIRE_MINUTES
+              value: "60"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# LoadBalancer on Docker Desktop publishes this on localhost:8000, which is
+# where the browser-side frontend expects the API (frontend/lib/api.ts).
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  type: LoadBalancer
+  selector:
+    app: backend
+  ports:
+    - port: 8000
+      targetPort: 8000
