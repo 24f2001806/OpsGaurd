@@ -2,7 +2,6 @@ import logging
 import smtplib
 from email.message import EmailMessage
 
-import httpx
 import psycopg
 from psycopg.rows import dict_row
 
@@ -12,12 +11,15 @@ logger = logging.getLogger("opsguard.alerts")
 
 
 def get_alert_config(endpoint_id: int) -> dict | None:
-    """Read the notification preferences for an endpoint."""
+    """Read notification preferences, automatically falling back to the endpoint owner's account email."""
     query = """
-        SELECT email_enabled, slack_enabled,
-               email_address, slack_webhook
-        FROM alert_configurations
-        WHERE endpoint_id = %s
+        SELECT 
+            COALESCE(ac.email_enabled, TRUE) AS email_enabled,
+            COALESCE(NULLIF(ac.email_address, ''), u.email) AS email_address
+        FROM monitored_endpoints e
+        JOIN users u ON e.user_id = u.id
+        LEFT JOIN alert_configurations ac ON e.id = ac.endpoint_id
+        WHERE e.id = %s
     """
 
     with psycopg.connect(settings.database_url) as connection:
@@ -56,23 +58,12 @@ def send_email(
         logger.exception("Failed to send email via SMTP")
 
 
-def send_slack(webhook: str, message: str) -> None:
-    """Send a message to the endpoint's configured Slack webhook."""
-    response = httpx.post(
-        webhook,
-        json={"text": message},
-        timeout=15,
-    )
-    response.raise_for_status()
-    logger.info("Slack alert sent successfully")
-
-
 def notify_endpoint(
     endpoint_id: int,
     url: str,
     event: str,
 ) -> None:
-    """Send notifications for DOWN or RECOVERED transitions with .env fallbacks."""
+    """Send email notifications for DOWN or RECOVERED transitions."""
     try:
         config = get_alert_config(endpoint_id) or {}
 
@@ -98,17 +89,7 @@ def notify_endpoint(
             logger.warning("Unknown alert event: %s", event)
             return
 
-        # Fall back to .env Slack Webhook if database record is empty
-        slack_webhook = config.get("slack_webhook") or settings.slack_webhook_url
-        slack_enabled = config.get("slack_enabled", True)
-
-        if slack_enabled and slack_webhook:
-            try:
-                send_slack(slack_webhook, message)
-            except Exception:
-                logger.exception("Slack notification failed for endpoint %s", endpoint_id)
-
-        # Fall back to SENDER_EMAIL if database email_address is empty
+        # Fetch email address (defaults to logged-in user's email)
         email_address = config.get("email_address") or settings.sender_email
         email_enabled = config.get("email_enabled", True)
 
