@@ -1,0 +1,46 @@
+# OPTIONAL, for the recovery demo only. A tiny website inside the cluster that
+# you can switch off and on:
+#   kubectl scale deployment demo-target --replicas=0   -> site goes DOWN
+#   kubectl scale deployment demo-target --replicas=1   -> site comes back (HEALTHY, incident RESOLVED)
+# Monitor it in OpsGuard with the URL:  http://demo-target
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-target
+  labels:
+    app: demo-target
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-target
+  template:
+    metadata:
+      labels:
+        app: demo-target
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-target
+spec:
+  selector:
+    app: demo-target
+  ports:
+    - port: 80
+      targetPort: 80
