@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
     options { disableConcurrentBuilds() }
@@ -92,36 +91,28 @@ pipeline {
                         passwordVariable: 'DOCKERHUB_TOKEN'
                     )
                 ]) {
-                    powershell '''
-                        $ErrorActionPreference = 'Stop'
-
-                        $env:DOCKERHUB_TOKEN | docker login --username $env:DOCKERHUB_USERNAME --password-stdin
-
-                        if ($LASTEXITCODE -ne 0) {
-                            exit $LASTEXITCODE
-                        }
-                    '''
-
                     bat '''
                         @echo off
+                        echo Docker Hub username: [%DOCKERHUB_USERNAME%]
+
+                        docker login -u %DOCKERHUB_USERNAME% -p %DOCKERHUB_TOKEN%
+                        if errorlevel 1 exit /b 1
 
                         docker tag opsguard-backend:%BUILD_NUMBER% %DOCKERHUB_USERNAME%/opsguard-backend:build-%BUILD_NUMBER%
                         if errorlevel 1 exit /b 1
-
                         docker tag opsguard-worker:%BUILD_NUMBER% %DOCKERHUB_USERNAME%/opsguard-worker:build-%BUILD_NUMBER%
                         if errorlevel 1 exit /b 1
-
                         docker tag opsguard-frontend:%BUILD_NUMBER% %DOCKERHUB_USERNAME%/opsguard-frontend:build-%BUILD_NUMBER%
                         if errorlevel 1 exit /b 1
 
                         docker push %DOCKERHUB_USERNAME%/opsguard-backend:build-%BUILD_NUMBER%
                         if errorlevel 1 exit /b 1
-
                         docker push %DOCKERHUB_USERNAME%/opsguard-worker:build-%BUILD_NUMBER%
                         if errorlevel 1 exit /b 1
-
                         docker push %DOCKERHUB_USERNAME%/opsguard-frontend:build-%BUILD_NUMBER%
                         if errorlevel 1 exit /b 1
+
+                        docker logout
                     '''
                 }
             }
