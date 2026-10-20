@@ -117,6 +117,48 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USERNAME',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    ),
+                    file(credentialsId: 'kubeconfig-docker-desktop', variable: 'KUBECONFIG')
+                ]) {
+                    bat '''
+                        @echo off
+                        kubectl get nodes
+                        if errorlevel 1 exit /b 1
+
+                        REM Load M2's manifests (creates anything missing).
+                        kubectl apply -f kubernetes/
+                        if errorlevel 1 exit /b 1
+
+                        REM Point each Deployment at the image pushed in the previous stage.
+                        kubectl set image deployment/backend backend=%DOCKERHUB_USERNAME%/opsguard-backend:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+                        kubectl set image deployment/frontend frontend=%DOCKERHUB_USERNAME%/opsguard-frontend:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+                        kubectl set image deployment/worker worker=%DOCKERHUB_USERNAME%/opsguard-worker:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+
+                        REM Wait until the new pods are healthy; fails the stage if they are not.
+                        kubectl rollout status deployment/backend --timeout=180s
+                        if errorlevel 1 exit /b 1
+                        kubectl rollout status deployment/frontend --timeout=180s
+                        if errorlevel 1 exit /b 1
+                        kubectl rollout status deployment/worker --timeout=180s
+                        if errorlevel 1 exit /b 1
+
+                        kubectl get pods
+                        kubectl get deployments -o wide
+                    '''
+                }
+            }
+        }
     }
 
     post {
