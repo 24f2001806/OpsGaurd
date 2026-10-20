@@ -1,0 +1,90 @@
+# Monitoring worker. Scale it with:  kubectl scale deployment worker --replicas=3
+# Several workers are safe: jobs are taken from Redis with BLPOP and the
+# scheduler uses ZREM, so a job is never run twice.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: opsguard-worker:v1
+          imagePullPolicy: Never   # use the image built locally, do not look online
+          ports:
+            - containerPort: 8081
+              name: health
+          env:
+            - name: REDIS_URL
+              value: redis://redis:6379/0
+            - name: REDIS_QUEUE
+              value: opsguard:monitoring:jobs
+            - name: DATABASE_URL
+              value: postgresql://opsguard_user:opsguard_password@postgres:5432/opsguard_db
+            - name: WORKER_ID          # shows the pod name in /health and the logs
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: HEALTH_PORT
+              value: "8081"
+            # Optional alert settings: only used if opsguard-secrets has these keys
+            - name: SENDER_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: opsguard-secrets
+                  key: SENDER_EMAIL
+                  optional: true
+            - name: SENDER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opsguard-secrets
+                  key: SENDER_PASSWORD
+                  optional: true
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opsguard-secrets
+                  key: SLACK_WEBHOOK_URL
+                  optional: true
+          # If /health stops answering 3 times in a row, Kubernetes restarts this container.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+---
+# Lets other things (for example Prometheus) reach the workers' port 8081.
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+spec:
+  selector:
+    app: worker
+  ports:
+    - name: health
+      port: 8081
+      targetPort: 8081

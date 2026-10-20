@@ -1,5 +1,4 @@
-# Owner: Member 3. Starter: shared PostgreSQL + Redis for everyone.
-# Add backend, worker and frontend services as their Dockerfiles are created.
+# Owner: Member 3. Runs the whole OpsGuard stack: PostgreSQL, Redis, backend, worker, frontend.
 services:
   postgres:
     image: postgres:16
@@ -12,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opsguard_user -d opsguard_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7
@@ -19,5 +23,91 @@ services:
     ports:
       - "6379:6379"
 
+  backend:
+    build: ./backend
+    image: opsguard-backend:v1
+    container_name: opsguard-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://opsguard_user:opsguard_password@postgres:5432/opsguard_db
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build: ./worker
+    image: opsguard-worker:v1
+    container_name: opsguard-worker
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REDIS_QUEUE: opsguard:monitoring:jobs
+      DATABASE_URL: postgresql://opsguard_user:opsguard_password@postgres:5432/opsguard_db
+      SENDER_EMAIL: ${SENDER_EMAIL:-}
+      SENDER_PASSWORD: ${SENDER_PASSWORD:-}
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: opsguard-frontend:v1
+    container_name: opsguard-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: opsguard-prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: opsguard-node-exporter
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: opsguard-redis-exporter
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_EXPORTER_CHECK_KEYS: opsguard:monitoring:jobs
+    depends_on:
+      - redis
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: opsguard-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - ./monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
 volumes:
   postgres_data:
+  grafana_data:
