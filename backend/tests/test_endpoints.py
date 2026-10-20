@@ -164,3 +164,17 @@ def test_user_b_cannot_touch_user_a_endpoint(client, headers_a, headers_b, creat
 def test_protected_routes_need_a_token(client, method, path):
     r = client.request(method, path, json={})
     assert_error(r, 401)
+
+def test_resume_queues_a_new_check_but_pause_does_not(client, headers_a, create_endpoint, enqueued_jobs):
+    ep = create_endpoint(headers_a)
+    assert enqueued_jobs == [ep["id"]]  # first job from creating it
+
+    client.put(f"/endpoints/{ep['id']}", headers=headers_a, json={"enabled": False})
+    assert enqueued_jobs == [ep["id"]]  # pausing queues nothing
+
+    r = client.put(f"/endpoints/{ep['id']}", headers=headers_a, json={"enabled": True})
+    assert r.status_code == 200
+    assert enqueued_jobs == [ep["id"], ep["id"]]  # resuming restarts checks
+
+    client.put(f"/endpoints/{ep['id']}", headers=headers_a, json={"name": "Renamed"})
+    assert enqueued_jobs == [ep["id"], ep["id"]]  # ordinary edits queue nothing

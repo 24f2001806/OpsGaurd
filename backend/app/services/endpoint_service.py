@@ -42,6 +42,7 @@ def create_endpoint(db: Session, user_id: int, data: EndpointCreate) -> Monitore
 
 def update_endpoint(db: Session, user_id: int, endpoint_id: int, data: EndpointUpdate) -> MonitoredEndpoint:
     endpoint = get_endpoint(db, user_id, endpoint_id)
+    was_enabled = endpoint.enabled
 
     changes = data.model_dump(exclude_unset=True)
     for field, value in changes.items():
@@ -61,8 +62,13 @@ def update_endpoint(db: Session, user_id: int, endpoint_id: int, data: EndpointU
 
     db.commit()
     db.refresh(endpoint)
-    return endpoint
 
+    # Resuming: the worker dropped its job while the endpoint was paused,
+    # so nothing is scheduled any more. Start a new chain of checks.
+    if endpoint.enabled and not was_enabled:
+        queue_service.enqueue_first_check(endpoint)
+
+    return endpoint
 
 def delete_endpoint(db: Session, user_id: int, endpoint_id: int) -> None:
     endpoint = get_endpoint(db, user_id, endpoint_id)
