@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
     options { disableConcurrentBuilds() }
@@ -29,14 +30,16 @@ pipeline {
                 }
             }
             post {
-                always { junit allowEmptyResults: true, testResults: 'backend/test-results.xml' }
+                always {
+                    junit allowEmptyResults: true, testResults: 'backend/test-results.xml'
+                }
             }
         }
 
         stage('Backend build check') {
             steps {
                 dir('backend') {
-                    // fails if any Python file has a syntax error
+                    // Fails if any Python file has a syntax error.
                     bat 'venv\\Scripts\\python -m compileall -q app'
                 }
             }
@@ -57,13 +60,15 @@ pipeline {
                 }
             }
             post {
-                always { junit allowEmptyResults: true, testResults: 'worker/test-results.xml' }
+                always {
+                    junit allowEmptyResults: true, testResults: 'worker/test-results.xml'
+                }
             }
         }
 
         stage('Observability tests (M4)') {
             steps {
-                // a failure here marks the build "unstable" (yellow), not failed
+                // A failure marks the build unstable, not failed.
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     bat 'backend\\venv\\Scripts\\python -m pytest -v tests\\test_observability.py'
                 }
@@ -77,10 +82,58 @@ pipeline {
                 bat 'docker build -t opsguard-frontend:%BUILD_NUMBER% frontend'
             }
         }
+
+        stage('Docker Hub push') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKERHUB_USERNAME',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
+                ]) {
+                    powershell '''
+                        $ErrorActionPreference = 'Stop'
+
+                        $env:DOCKERHUB_TOKEN | docker login --username $env:DOCKERHUB_USERNAME --password-stdin
+
+                        if ($LASTEXITCODE -ne 0) {
+                            exit $LASTEXITCODE
+                        }
+                    '''
+
+                    bat '''
+                        @echo off
+
+                        docker tag opsguard-backend:%BUILD_NUMBER% %DOCKERHUB_USERNAME%/opsguard-backend:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+
+                        docker tag opsguard-worker:%BUILD_NUMBER% %DOCKERHUB_USERNAME%/opsguard-worker:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+
+                        docker tag opsguard-frontend:%BUILD_NUMBER% %DOCKERHUB_USERNAME%/opsguard-frontend:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+
+                        docker push %DOCKERHUB_USERNAME%/opsguard-backend:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+
+                        docker push %DOCKERHUB_USERNAME%/opsguard-worker:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+
+                        docker push %DOCKERHUB_USERNAME%/opsguard-frontend:build-%BUILD_NUMBER%
+                        if errorlevel 1 exit /b 1
+                    '''
+                }
+            }
+        }
     }
 
     post {
-        success { echo 'Pipeline finished: all stages passed.' }
-        failure { echo 'Pipeline failed: open the red stage and read the log.' }
+        success {
+            echo 'Pipeline finished: all stages passed.'
+        }
+        failure {
+            echo 'Pipeline failed: open the red stage and read the log.'
+        }
     }
 }
