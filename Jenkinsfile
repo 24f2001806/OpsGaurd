@@ -11,6 +11,7 @@ pipeline {
         stage('Checkout') {
             steps { checkout scm }
         }
+
         stage('Install dependencies') {
             steps {
                 dir('backend') {
@@ -20,6 +21,7 @@ pipeline {
                 }
             }
         }
+
         stage('Backend tests') {
             steps {
                 dir('backend') {
@@ -30,5 +32,55 @@ pipeline {
                 always { junit allowEmptyResults: true, testResults: 'backend/test-results.xml' }
             }
         }
+
+        stage('Backend build check') {
+            steps {
+                dir('backend') {
+                    // fails if any Python file has a syntax error
+                    bat 'venv\\Scripts\\python -m compileall -q app'
+                }
+            }
+        }
+
+        stage('Worker tests') {
+            environment {
+                REDIS_URL = 'redis://localhost:6379/0'
+                REDIS_QUEUE = 'opsguard:monitoring:jobs'
+                DATABASE_URL = 'postgresql://opsguard_user:opsguard_password@localhost:5432/opsguard_test_db'
+            }
+            steps {
+                dir('worker') {
+                    bat 'python -m venv venv'
+                    bat 'venv\\Scripts\\python -m pip install --upgrade pip'
+                    bat 'venv\\Scripts\\python -m pip install -r requirements.txt'
+                    bat 'venv\\Scripts\\python -m pytest -v --junitxml=test-results.xml'
+                }
+            }
+            post {
+                always { junit allowEmptyResults: true, testResults: 'worker/test-results.xml' }
+            }
+        }
+
+        stage('Observability tests (M4)') {
+            steps {
+                // a failure here marks the build "unstable" (yellow), not failed
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    bat 'backend\\venv\\Scripts\\python -m pytest -v tests\\test_observability.py'
+                }
+            }
+        }
+
+        stage('Docker build') {
+            steps {
+                bat 'docker build -t opsguard-backend:%BUILD_NUMBER% backend'
+                bat 'docker build -t opsguard-worker:%BUILD_NUMBER% worker'
+                bat 'docker build -t opsguard-frontend:%BUILD_NUMBER% frontend'
+            }
+        }
+    }
+
+    post {
+        success { echo 'Pipeline finished: all stages passed.' }
+        failure { echo 'Pipeline failed: open the red stage and read the log.' }
     }
 }
