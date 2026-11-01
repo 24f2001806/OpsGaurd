@@ -13,6 +13,7 @@ scrape_configs:
     static_configs:
       - targets: ['node-exporter:9100']
 
+  # ---------- App running in DOCKER COMPOSE ----------
   # 3. OpsGuard API and request rate (Member 1)
   - job_name: 'opsguard-backend-api'
     metrics_path: '/metrics'
@@ -24,7 +25,20 @@ scrape_configs:
     static_configs:
       - targets: ['redis-exporter:9121']
 
-  # 5. Kubernetes pod health: enable after the Kubernetes step
-  # - job_name: 'kubernetes-cadvisor'
-  #   static_configs:
-  #     - targets: ['kubernetes.default.svc:10250']
+  # ---------- App running in KUBERNETES (Docker Desktop) ----------
+  # Kubernetes publishes these ports on the laptop, and Prometheus (a container)
+  # reaches the laptop through the name host.docker.internal.
+  # Only one of the two sets is UP at a time, which is normal. Check http://localhost:9090/targets
+  - job_name: 'opsguard-backend-k8s'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['host.docker.internal:8000']
+
+  - job_name: 'redis-queue-exporter-k8s'
+    static_configs:
+      - targets: ['host.docker.internal:9121']
+
+  # 5. Kubernetes pod health (kube-state-metrics, see monitoring/k8s/monitoring.yaml)
+  - job_name: 'kubernetes-state'
+    static_configs:
+      - targets: ['host.docker.internal:8082']

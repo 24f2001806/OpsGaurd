@@ -5,14 +5,24 @@
   "schemaVersion": 39,
   "version": 1,
   "refresh": "10s",
-  "time": { "from": "now-15m", "to": "now" },
-  "annotations": { "list": [] },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "annotations": {
+    "list": []
+  },
   "panels": [
     {
       "id": 1,
       "title": "CPU Usage (%)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
       "targets": [
         {
           "refId": "A",
@@ -25,8 +35,18 @@
       "id": 2,
       "title": "Memory Usage (Bytes)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
       "targets": [
         {
           "refId": "A",
@@ -39,7 +59,12 @@
       "id": 3,
       "title": "API Request Rate (req/sec)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
       "targets": [
         {
           "refId": "A",
@@ -52,7 +77,12 @@
       "id": 4,
       "title": "Redis Queue Length",
       "type": "stat",
-      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 8 },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 8
+      },
       "targets": [
         {
           "refId": "A",
@@ -63,14 +93,19 @@
     },
     {
       "id": 5,
-      "title": "Worker / Pod Health",
+      "title": "Worker Pods Ready (Kubernetes)",
       "type": "stat",
-      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 8 },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 8
+      },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(up{job=\"opsguard-backend-api\"})",
-          "legendFormat": "Services Up"
+          "expr": "sum(kube_deployment_status_replicas_available{namespace=\"default\",deployment=\"worker\"}) or vector(0)",
+          "legendFormat": "Worker pods ready"
         }
       ]
     }
